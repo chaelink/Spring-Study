@@ -1,0 +1,414 @@
+# 섹션 9. 빈 스코프
+
+## 3. 프로토타입 스코프 - 싱글톤 빈과 함께 사용시 문제점
+프로토타입 스코프는 항상 새로운 객체 인스턴스를 생성해서 반환한다. 하지만 싱글톤 빈과 함께 사용할 때는 의도한 대로 잘 동작하지 않으므로 주의해야 한다.
+
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/3f5c7e97-960f-4b3a-9662-6d3048e3d207)
+
+
+- 스프링 컨테이너에 프로토타입 빈 요청
+- 스프링 컨테이너는 프로토타입 빈을 새로 생성해서 반환(count 값은 0)
+- 클라이언트는 조회한 프로토타입 빈에 addCount() 호출, count 필드 +1
+- 결과적으로 프로토타입 빈의 count 값은 1이 된다
+- 클라이언트 a,b의 요청을 각각의 빈에서 독립적으로 실행
+
+
+```java
+public class SingletonWithPrototypeTest1 {
+
+    @Test
+    void prototypeFind() {
+        AnnotationConfigApplicationContext ac = new AnnotationConfigApplicationContext(PrototypeBean.class);
+        PrototypeBean prototypeBean1 = ac.getBean(PrototypeBean.class);
+        prototypeBean1.addCount();
+        assertThat(prototypeBean1.getCount()).isEqualTo(1);
+
+        PrototypeBean prototypeBean2 = ac.getBean(PrototypeBean.class);
+        prototypeBean2.addCount();
+        assertThat(prototypeBean2.getCount()).isEqualTo(1);
+
+    }
+
+    @Scope("prototype")
+    static class PrototypeBean {
+        private int count = 0;
+        public void addCount() {
+            count++;
+        }
+        public int getCount() {
+            return count;
+        }
+        @PostConstruct
+        public void init() {
+            System.out.println("PrototypeBean.init " + this);
+        }
+        @PreDestroy
+        public void destroy() {
+            System.out.println("PrototypeBean.destroy");
+        }
+    }
+}
+```
+**실행 결과**
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/1744b17a-f102-4e87-81ff-bcd57cedf4a5)
+
+**싱글톤에서 프로토타입 빈 사용**
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/4b3b6009-63fb-42cc-af2f-2a0894a307d5)
+
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/921b885c-af11-4c27-865e-5b3b5bb49ca0)
+
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/203b7ff7-6438-480c-897a-b378baba5a59)
+
+**clientBean**
+
+- 싱글톤으로 스프링 컨테이너 생성 시점에 함께 생성, 의존 관계 주입 발생
+- 의존관계 자동 주입 사용, 주입 시점에 스프링 컨테이너에 프로토타입 빈 요청
+- 스프링 컨테이너는 프로토 타입 빈 생성 후 반환(카운트 0)
+- clientBean은 프로토 타입 빈을 내부 필드에 보관
+
+1. clientA 
+
+-      clientBean을 스프링 컨테이너에 요청해 받은 후 카운트를 증가시키면 1이 됨
+
+2. clientB
+
+-      clientBean을 스프링 컨테이너에 요청해 받은 후 카운트를 증가시키면 2가 됨
+
+<aside>
+❓ 스프링은 일반적으로 싱글톤 빈을 사용하므로, 싱글톤 빈이 프로토타입 빈을 사용하게 된다. 그런데, 싱글톤은 생성 시점에만 의존관계 주입을 받기 떄문에, 프로토타입 빈이 새로 생성되지는 하지만, 싱글톤 빈과 함께 계속 유지되는 문제 발생
+
+</aside>
+
+⇒ 우리가 원하는 것은 프로토타입 빈을 주입 시점에만 새로 생성하는게 아니라, 사용할 때 마다 새로 생성해서 사용하는 것
+
+<br>
+<br>
+
+## 4. 프로토타입 스코프 - 싱글톤 빈과 함께 사용시 Provider로 문제 해결
+
+싱글톤 빈과 프로토타입 빈을 함께 사용할 때, 어떻게 하면 사용할 때 마다 항상 새로운 프로토타입 빈을 생성할 수 있을까? 
+=> 가장 간단한 방법 : 싱글톤 빈이 프로토 타입을 사용할 때 마다 스프링 컨테이너에 새로 요청하는 방법
+
+```java
+static class ClientBean {
+    @Autowired
+    private ApplicationContext ac;
+
+    public int logic() {
+        PrototypeBean prototypeBean = ac.getBean(PrototypeBean.class);
+        prototypeBean.addCount();
+        int count = prototypeBean.getCount();
+        return count;
+    }
+ }
+```
+
+- ```PrototypeBean prototypeBean = ac.getBean(PrototypeBean.class);``` 항상 새로운 프로토타입 빈이 생성된다
+- 의존관계를 외부에서 주입받는(DI)게 아니라 이렇게 직접 필요한 의존관계를 찾는 것을 Dependency Lookup(DL)이라 한다
+- 그런데 이렇게 스프링의 애플리케이션 컨텍스트 전체를 주입 받게 되면, 스프링 컨테이너에 종속적인 코드가 되고 단위 테스트도 어려워진다
+- 지금 필요한 기능은 지정한 프로토 타입 빈을 컨테이너에서 대신 찾아주는 딱 DL 정도의 기능
+<br>
+<br>
+
+**ObjectFactory,ObjectProvider**
+**지정한 빈을 컨테이너에서 대신 찾아주는 DL 서비스 제공**
+과거의 ObjectFactory에서 편의 기능을 추가해서 ObjectProvider를 만듦
+
+```java
+@Scope("singleton")
+    static class ClientBean {
+
+        @Autowired
+        private ObjectProvider<PrototypeBean> prototypeBeanProvider;
+        
+        public int logic() {
+            PrototypeBean prototypeBean = prototypeBeanProvider.getObject();
+            prototypeBean.addCount();
+            int count = prototypeBean.getCount();
+            return count;
+        }
+    }
+```
+  
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/5deefcec-e42a-476a-b886-1425de0cd25b)
+
+- 항상 새로운 프로토타입 빈이 생성된다
+- ObjectProvider 의 getObject() 를 호출하면, 내부에서 스프링 컨테이너를 통해 해당 빈을 찾아서
+반환한다. (DL)
+- 스프링이 제공하는 기능이지만, 기능이 단순하여 단위테스트를 만들거나 mock 코드를 만들기 쉽다
+- 딱 필요한 DL 기능만 제공한다
+
+- > ObjectFactory: 기능이 단순, 별도의 라이브러리 필요 없음, 스프링에 의존
+
+- > ObjectProvider: ObjectFactory 상속, 옵션, 스트림 처리등 편의 기능이 많고, 별도의 라이브러리 필요
+없음, 스프링에 의존
+
+<br>
+
+
+**JSR-330 Provider**
+자바 표준, gradle에 ```jakarta.inject:jakarta.inject-api:2.0.1``` 라이브러리 추가 필요
+
+```java
+@Scope("singleton")
+    static class ClientBean {
+
+        @Autowired
+        private Provider<PrototypeBean> prototypeBeanProvider;
+
+        public int logic() {
+            PrototypeBean prototypeBean = prototypeBeanProvider.get();
+            prototypeBean.addCount();
+            int count = prototypeBean.getCount();
+            return count;
+        }
+    }
+```
+
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/baea96a0-3f0f-4a8d-85ba-a8a3b998fa61)
+
+- 항상 새로운 프로토타입 빈 생성
+- provider 의 get() 을 호출하면 내부에서 스프링 컨테이너를 통해 해당 빈을 찾아서 반환(DL)
+- 자바 표준, 기능이 단순하므로 단위 테스트 또는 mock 코드를 만들기 훨씬 쉬워진다.
+- 딱 필요한 정도의 DL 기능 제공
+
+**특징**
+
+- **get()** 메서드 하나로 기능이 매우 단순
+- 별도의 라이브러리 필요
+- 자바 표준이므로 스프링이 아닌 다른 컨테이너에서도 사용 가능
+
+**정리**
+
+1. 프로토타입 빈은 매번 사용할 때 마다 의존관계 주입이 완료된 새로운 객체가 필요할 때 사용한다.
+2. 실무에서는 대부분 싱글톤을 사용하고 프로토타입 빈을 사용하는 일은 드물다.
+3. ObjectProvider , JSR330 Provider 등은 프로토타입 뿐만 아니라 DL이 필요한 경우는 언제든지
+사용할 수 있다.
+
+<br>
+<br>
+
+## 5. 웹 스코프
+
+**웹 스코프 특징**
+
+- 웹 환경에서만 동작한다
+- 웹 스코프는 프로토타입과 다르게 스프링이 해당 스코프의 종료 시점까지 관리한다.(종료 메서드가 호출된다)
+
+
+**웹 스코프 종류**
+
+- **request** : HTTP 요청 하나가 들어오고 나갈 때 까지 유지되는 스코프, 각각의 HTTP 요청마다 별도의 빈
+인스턴스가 생성되고, 관리된다.
+- **session** :  HTTP Session과 동일한 생명주기를 가지는 스코프
+- **application** : 서블릿 컨텍스트( ServletContext )와 동일한 생명주기를 가지는 스코프
+- **websocket** : 웹 소켓과 동일한 생명주기를 가지는 스코프
+
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/6e294b08-1c2a-4b98-95d1-7b341c0ac843)
+
+<br>
+<br>
+
+## 6. request 스코프 예제 만들기
+**웹 환경 추가**
+
+- ```implementation 'org.springframework.boot:spring-boot-starter-web'``` 추가하기
+- 스프링 부트는 웹 라이브러리가 없으면 ```AnnotationConfigApplicationContext``` 을 기반으로 애플리케이션 구동
+- 웹 라이브러리가 추가되면 ```AnnotationConfigServletWebServerApplicationContext``` 를 기반으로 애플리케이션 구동
+
+
+**request 스코프 예제 개발**
+_동시에 여러 HTTP 요청이 오면 정확히 어떤 요청이 남긴 로그인지 구분하기 어렵다_
+이럴 때 사용하면 좋은것이 바로 request 스코프!
+
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/77cbfd7c-3930-47d6-b8f1-6fa4c7cbac60)
+
+**MyLogger**
+```java
+@Component
+@Scope(value = "request")
+public class MyLogger {
+
+    private String uuid;
+    private String requestURL;
+
+    public void setRequestURL(String requestURL) {
+        this.requestURL = requestURL;
+    }
+    public void log(String message) {
+        System.out.println("[" + uuid + "]" + "[" + requestURL + "] " +
+                message);
+    }
+    @PostConstruct
+    public void init() {
+        uuid = UUID.randomUUID().toString();
+        System.out.println("[" + uuid + "] request scope bean create:" + this);
+    }
+    @PreDestroy
+    public void close() {
+        System.out.println("[" + uuid + "] request scope bean close:" + this);
+    }
+}
+```
+
+- 로그 출력을 위한 클래스
+- ```@Scope(value = "request") ```를 사용해서 request 스코프로 지정
+- HTTP 요청 당 하나씩 생성되고, HTTP 요청이 끝나는 시점에 소멸된다.
+- 빈 생성 시점에 자동으로 ```@PostConstruct``` 메서드를 사용해서 uuid 생성,저장
+- 빈 소멸 시점에 ```@PreDestroy```를 사용해서 종료 메서드를 남긴다
+- ```requestURL``` 은 빈 생성시점에는 알 수 없으므로, 외부에서 settter로 입력 받는다
+
+<br>
+
+**LogDemoController**
+```java
+@Controller
+@RequiredArgsConstructor
+public class LogDemoController {
+    private final LogDemoService logDemoService;
+    private final MyLogger myLogger;
+
+    @RequestMapping("log-demo")
+    @ResponseBody
+    public String logDemo(HttpServletRequest request) {
+        String requestURL = request.getRequestURL().toString();
+        myLogger.setRequestURL(requestURL);
+        myLogger.log("controller test");
+        logDemoService.logic("testId");
+        return "OK";
+    }
+}
+```
+
+- 로거 작동 확인 용 테스트 컨트롤러
+-  HttpServletRequest를 통해서 요청 URL을 받았다
+- 이렇게 받은 requestURL 값을 myLogger에 저장해둔다. myLogger는 HTTP 요청 당 각각 구분되므로 다른 HTTP 요청 때문에 값이 섞이는 걱정은 하지 않아도 된다
+- 컨트롤러에서 controller test라는 로그를 남긴다
+
+> 참고 : requestURL을 MyLogger에 저장하는 부분은 컨트롤러보다는 공통 처리가 가능한 스프링 인터셉터나 서블릿 필터 같은 곳을 활용하는 것이 좋다.
+
+<br>
+
+**LogDemoService**
+```java
+@Service
+@RequiredArgsConstructor
+public class LogDemoService {
+
+    private final MyLogger myLogger;
+
+    public void logic(String id) {
+        myLogger.log("service id = " + id);
+    }
+}
+```
+
+- 비즈니스 로직이 있는 서비스 계층에서도 로그를 출력해보자
+- **웹과 관련된 부분은 컨트롤러까지만 사용해야 한다**
+     -  request scope를 사용하지 않고 파라미터로 이 모든 정보를 서비스 계층에 넘기면 안된다
+- request scope의 MyLogger 덕분에 이런 부분을 파라미터로 넘기지 않고, MyLogger의 멤버변수에 저장해서 코드와 계층을 깔끔하게 유지할 수 있다.
+- 
+<br>
+
+**실행**
+
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/083eb887-83f1-4c98-8494-5a75e8956772)
+
+**기대와 다르게 애플리케이션 실행 시점에 오류 발생**
+고객 요청이 아직 들어오지 않았다(http request) 따라서 scope request 생존 범위가 아니라 오류 발생
+
+
+## 7. 스코프와 Provider
+
+**ObjectProvider 사용**
+
+**LogDemoController**
+ ```java
+@Controller
+@RequiredArgsConstructor
+public class LogDemoController {
+    private final LogDemoService logDemoService;
+    private final ObjectProvider<MyLogger> myLoggerProvider;
+
+    @RequestMapping("log-demo")
+    @ResponseBody
+    public String logDemo(HttpServletRequest request) {
+        String requestURL = request.getRequestURL().toString();
+        MyLogger myLogger = myLoggerProvider.getObject();
+        myLogger.setRequestURL(requestURL);
+        
+        myLogger.log("controller test");
+        logDemoService.logic("testId");
+        return "OK";
+    }
+}
+```
+<br>
+
+**LogDemoService**
+```java
+@Service
+@RequiredArgsConstructor
+public class LogDemoService {
+
+    private final ObjectProvider<MyLogger> myLoggerProvider;
+    public void logic(String id) {
+        MyLogger myLogger = myLoggerProvider.getObject();
+        myLogger.log("service id = " + id);
+    }
+}
+```
+<br>
+
+**실행 성공**
+
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/8de41c90-4797-4fd3-9f65-af8278faf4e8)
+
+- ObjectProvider 덕분에 ```ObjectProvider.getObject()``` 를 호출하는 시점까지 request scope 빈의 생성을 지연
+- ``` ObjectProvider.getObject()``` 를 호출하는 시점에는 HTTP 요청이 진행중이므로 request scope 빈이 정상 생성 된다
+- ```ObjectProvider.getObject()``` 를 LogDemoController , LogDemoService 에서 각각 한번씩 따로 호출해도 같은 HTTP 요청이면 같은 스프링 빈이 반환된다! 
+
+<br>
+<br>
+
+## 8. 스코프와 프록시
+
+<br>
+
+**프록시 방식 사용해보기**
+<br>
+
+**MyLogger**
+``` java
+@Component
+@Scope(value = "request", proxyMode = ScopedProxyMode.TARGET_CLASS)
+public class MyLogger {
+}
+```
+- 핵심 부분 ```proxyMode = ScopedProxyMode.TARGET_CLASS``` 추가
+   - 적용 대상이 클래스면 TARGET_CLASS
+   - 적용 대상이 인터페이스면 INTERFACES
+- 가짜 프록시 클래스를 만들어두고 HTTP request와 상관없이 가짜 프록시를 미리 다른 빈에 주입해 둘 수 있다.
+
+**나머지 코드는 provider 사용 이전으로 돌리기**
+
+**성공**
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/24af23ad-c7de-4158-a30e-862f701ed8da)
+
+<br>
+<br>
+**웹 스코프와 프록시 동작 원리**
+
+**CGLIB라는 라이브러리로 내 클래스를 상속 받은 가짜 프록시 객체를 만들어서 주입**
+
+```myLogger = class hello.core.common.MyLogger$$EnhancerBySpringCGLIB$$b68b726d```
+
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/1cf3d1eb-8b3b-492d-a12e-0ba68c31a35c)
+
+
+
+
+
+
+
+
