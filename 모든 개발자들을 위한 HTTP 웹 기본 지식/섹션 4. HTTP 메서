@@ -1,0 +1,131 @@
+# 섹션 4. HTTP 메서드
+
+## 1. HTTP API를 만들어보자
+
+### 요구사항 정리
+회원 정보 관리 API 만들기
+
+- 회원 목록 조회
+- 회원 조회
+- 회원 등록
+- 회원 수정
+- 회원 삭제
+
+### API URI 설계
+
+- 회원 목록 조회 /read-member-list
+- 회원 조회 /read-member-by-id
+
+> 이런 형식은 좋은 형식이 아니다.
+
+가장 중요한 것은 **리소스 식별!!**
+
+- 리소스란, 회원이라는 개념 자체
+
+
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/10eac730-152c-4bb2-803f-3242cdbe3794)
+
+> 어떻게 여러 요구 사항들을 구분하는가에 대한 문제 발생
+
+
+### 리소스와 행위 분리
+**리소스 : 회원**
+**행위 : 조회, 등록, 삭제, 변경**
+
+
+## 2. HTTP메서드 - GET, POST
+
+### HTTP 메서드 종류
+
+- GET: 리소스 조회
+- POST: 요청 데이터 처리, 주로 등록에 사용
+- PUT: 리소스를 대체, 해당 리소스가 없으면 생성
+- PATCH: 리소스 부분 변경
+- DELETE: 리소스 삭제
+
+**기타 메서드**
+- HEAD: GET과 동일하지만 메시지 부분을 제외하고, 상태 줄과 헤더만 반환
+- OPTIONS: 대상 리소스에 대한 통신 가능 옵션(메서드)을 설명(주로 CORS에서 사용)
+- CONNECT: 대상 리소스로 식별되는 서버에 대한 터널을 설정
+- TRACE: 대상 리소스에 대한 경로를 따라 메시지 루프백 테스트를 수행
+
+### GET
+
+1. 리소스 조회
+2. 서버에 전달하고 싶은 데이터는 query를 통해 전달
+3. 메세지 바디를 통한 제이터 전달은 권장하지 않음
+
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/be468545-17a8-4712-8b59-7feedf563b32)
+
+
+### POST
+
+1. 요청 데이터 처리
+2. 메시지 바디를 통해 서버로 요청 데이터 전달
+3. 서버는 요청 데이터 처리 ( 메시지 바디를 통해 들어온 데이터를 처리하는 모든 기능을 수행)
+4. 전달된 데이터는 주로 신규 리소스 등록, 프로세스 처리에 사용
+
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/41402fc0-6f71-4b65-a174-1bd331084dc9)
+
+
+## 3. HTTP메서드 - PUT, PATCH, DELETE
+
+### PUT
+
+- 리소스 대체
+    - 리소스가 있으면 대체
+    - 없으면 생성 
+- 클라이언트가 리소스를 식별함 
+    - POST 와의 차이점 
+
+<br>
+
+
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/037da86c-fbe5-4f42-8a6f-31d0d7d4f887)
+
+> old, 50으로 대체된다
+
+<br>
+
+
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/bb532723-679e-4e12-bba4-c9eecf655dad)
+
+> old, 50 새로 생성
+
+<br>
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/6b8ee951-4b1b-4074-aa00-525c6d1372ff)
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/bc19caef-2e59-4678-835c-cc9961983f98)
+
+
+
+### PATCH
+
+- 리소스 부분 변경
+
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/d373f2e1-bae3-44fd-b182-116a7bca27d2)
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/898e089c-9d9c-4694-8acd-d09938489147)
+
+
+### DELETE
+
+- 리소스 제거
+
+
+
+## 4. HTTP메서드의 속성
+
+- **안전(Safe)**
+호출해도 리소스를 변경하지 않는다.
+
+- **멱등(Idempotent)**
+한 번 호출하즌 두 번 호출하든 결과가 같다.
+
+![image](https://github.com/2024-SpringStudy/spring/assets/92051742/639f4ba4-084b-4a65-9ee1-9d606104be9e)
+
+- **캐시가능(Cacheable)**
+GET, HEAD, POST, PATCH는 응답 결과 리소스를 캐시해서 사용 가능
+
+
+
+
+
