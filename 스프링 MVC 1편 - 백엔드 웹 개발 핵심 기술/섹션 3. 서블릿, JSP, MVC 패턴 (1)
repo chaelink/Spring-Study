@@ -1,1 +1,422 @@
+# 섹션 3. 서블릿, JSP, MVC 패턴 (1)
+
+## 1. 회원 관리 웹 애플리케이션 요구사항
+
+**회원 정보 : 이름 username, 나이 age**
+
+**기능 요구사항 : 회원 저장, 회원 목록 조회**
+
+<br>
+
+**회원 도메인 모델**
+```java
+public class Member {
+    
+    private Long id;
+    private String username;
+    private int age;
+    
+    public Member() {
+    }
+    
+    public Member(String username, int age) {
+        this.username = username;
+        this.age = age;
+    }
+}
+```
+<br>
+
+**회원 저장소**
+
+```java
+public class MemberRepository {
+
+    private static Map<Long, Member> store = new HashMap<>();
+
+    private static long sequence = 0L; //static 사용
+
+    private static final MemberRepository instance = new MemberRepository();
+
+    public static MemberRepository getInstance() {
+        return instance;
+    }
+
+    private MemberRepository() {
+    }
+
+    public Member save(Member member) {
+        member.setId(++sequence);
+        store.put(member.getId(), member);
+        return member;
+    }
+
+    public Member findfById(Long id) {
+        return store.get(id);
+    }
+
+    public List<Member> findAll() {
+        return new ArrayList<>(store.values());
+    }
+
+    public void clearStore() {
+        store.clear();
+    }
+
+}
+```
+
+> private 으로 instance를 생성하여 회원 저장소에 싱글톤 패턴 적용 ( 스프링을 사용하면 스프링 빈으로 등록되지만 여기서는 최대한 스프링 없이 구현)
+
+<br>
+
+**회원 저장소 테스트**
+
+```java
+class MemberRepositoryTest {
+
+    MemberRepository memberRepository = MemberRepository.getInstance();
+
+    @AfterEach
+    void afterEach() {
+        memberRepository.clearStore();
+    }
+
+    @Test
+    void save() {
+        //given
+        Member member = new Member("hello", 20);
+
+        //when
+        Member savedMember = memberRepository.save(member);
+
+        //then
+        Member findMember = memberRepository.findfById(savedMember.getId());
+        Assertions.assertThat(findMember).isEqualTo(savedMember);
+
+    }
+
+    @Test
+    void findAll() {
+        //given
+        Member member1 = new Member("member1", 20);
+        Member member2 = new Member("member2", 30);
+
+        memberRepository.save(member1);
+        memberRepository.save(member2);
+
+        //when
+        List<Member> result = memberRepository.findAll();
+
+        //then
+        Assertions.assertThat(result.size()).isEqualTo(2);
+        Assertions.assertThat(result).contains(member1,member2);
+    }
+}
+```
+
+## 2. 서블릿으로 회원 관리 웹 애플리케이션 만들기
+
+**회원 등록 HTML 폼**
+
+```java
+@WebServlet(name = "memberFormServlet", urlPatterns = "/servlet/members/new-form")
+public class MemberFormServlet extends HttpServlet {
+    @Override
+    protected void service(HttpServletRequest request, HttpServletResponse
+            response)
+            throws ServletException, IOException {
+        response.setContentType("text/html");
+        response.setCharacterEncoding("utf-8");
+        PrintWriter w = response.getWriter();
+        w.write("<!DOCTYPE html>\n" +
+                "<html>\n" +
+                "<head>\n" +
+                "    <meta charset=\"UTF-8\">\n" +
+                "    <title>Title</title>\n" +
+                "</head>\n" +
+                "<body>\n" +
+                "<form action=\"/servlet/members/save\" method=\"post\">\n" +
+                "    username: <input type=\"text\" name=\"username\" />\n" +
+                "    age:      <input type=\"text\" name=\"age\" />\n" +
+                "    <button type=\"submit\">전송</button>\n" +
+                "</form>\n" +
+                "</body>\n" +
+                "</html>\n");
+    }
+}
+```
+
+> 단순히 회원 정보를 저장하는 HTML FORM, 전달 받는 서블릿도 별도로 만들어야 한다.
+
+<br>
+<br>
+
+**회원 저장 서블릿**
+
+```java
+@WebServlet(name = "memberSaveServlet", urlPatterns = "/servlet/members/save")
+public class MemberSaveServlet extends HttpServlet {
+
+    private MemberRepository memberRepository = MemberRepository.getInstance();
+
+    @Override
+    protected void service(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+
+        System.out.println("MemberSaveServlet.service");
+        String username = request.getParameter("username");
+        int age = Integer.parseInt(request.getParameter("age"));
+        Member member = new Member(username, age);
+        System.out.println("member = " + member);
+        memberRepository.save(member);
+        response.setContentType("text/html");
+        response.setCharacterEncoding("utf-8");
+        PrintWriter w = response.getWriter();
+
+        w.write("<html>\n" +
+                "<head>\n" +
+                "    <meta charset=\"UTF-8\">\n" +
+                "</head>\n" +
+                "<body>\n" +
+                "성공\n" +
+                "<ul>\n" +
+                "    <li>id="+member.getId()+"</li>\n" +
+                "    <li>username="+member.getUsername()+"</li>\n" +
+                "    <li>age="+member.getAge()+"</li>\n" +
+                "</ul>\n" +
+                "<a href=\"/index.html\">메인</a>\n" +
+                "</body>\n" +
+                "</html>");
+    }
+}
+```
+**MemberSaveServlet 동작 순서**
+
+1. 파라미터를 조회해서 Member 객체 생성
+2. Member객체를 MemberRepository를 통해서 저장
+3. Member 객체를 사용해서 결과 화면용 HTML 동적 생성, 응답
+
+<br>
+<br>
+
+**회원 목록 조회**
+
+```java
+@WebServlet(name = "memberListServlet", urlPatterns = "/servlet/members")
+ public class MemberListServlet extends HttpServlet {
+ private MemberRepository memberRepository = MemberRepository.getInstance();
+    @Override
+ protected void service(HttpServletRequest request, HttpServletResponse 
+response)
+ throws ServletException, IOException {
+        response.setContentType("text/html");
+        response.setCharacterEncoding("utf-8");
+ List<Member> members = memberRepository.findAll();
+ PrintWriter w = response.getWriter();
+        w.write("<html>");
+        w.write("<head>");
+        w.write("    <meta charset=\"UTF-8\">");
+        w.write("    <title>Title</title>");
+        w.write("</head>");
+        w.write("<body>");
+        w.write("<a href=\"/index.html\">[메인](https://github.com/%22/index.html/%22)</a>");
+        w.write("<table>");
+        w.write("    <thead>");
+        w.write("    <th>id</th>");
+        w.write("    <th>username</th>");
+        w.write("    <th>age</th>");
+        w.write("    </thead>");
+        w.write("    <tbody>");
+ /*
+        w.write("    <tr>");
+        w.write("        <td>1</td>");
+        w.write("        <td>userA</td>");
+        w.write("        <td>10</td>");
+        w.write("    </tr>");
+ */
+ }
+ for (Member member : members) {
+            w.write("    <tr>");
+            w.write("        <td>" + member.getId() + "</td>");
+            w.write("        <td>" + member.getUsername() + "</td>");
+            w.write("        <td>" + member.getAge() + "</td>");
+            w.write("    </tr>");
+        }
+        w.write("    </tbody>");
+        w.write("</table>");
+        w.write("</body>");
+        w.write("</html>");
+    }
+```
+<br>
+
+**MemberListServlet 동작 순서**
+
+1. memberRepository.findAll()을 통해 모든 회원 조회
+2. 회원 목록 HTML을 for 루프를 통해서 회원 수 만큼 동적으로 생성하고 응답
+
+<br>
+<br>
+
+## 3. JSP로 회원 관리 웹 애플리케이션 만들기
+
+**JSP 라이브러리 추가**
+build.gradle
+
+``` java
+//JSP 추가 시작
+implementation 'org.apache.tomcat.embed:tomcat-embed-jasper'
+ implementation 'jakarta.servlet:jakarta.servlet-api' //스프링부트 3.0 이상
+implementation 'jakarta.servlet.jsp.jstl:jakarta.servlet.jsp.jstl-api' //스프링부트 
+3.0 이상
+implementation 'org.glassfish.web:jakarta.servlet.jsp.jstl' //스프링부트 3.0 이상
+//JSP 추가 끝
+```
+
+**회원 등록 폼 JSP**
+```java
+<%@ page contentType="text/html;charset=UTF-8" language="java" %> //첫 줄은 JSP 문서라는 의미
+ <html>
+ <head>
+    <title>Title</title>
+ </head>
+ <body>
+
+ <form action="/jsp/members/save.jsp" method="post">
+    username: <input type="text" name="username" />
+    age:      <input type="text" name="age" />
+    <button type="submit">전송</button>
+ </form>
+ </body>
+</html>
+```
+
+> 첫 줄을 제외하고는 HTML과 완전히 똑같다. JSP는 서버 내부에서 서블릿으로 변환되는데, 우리가 만들었던 MemberFormServlet과 거의 유사하다
+
+<br>
+
+**회원 저장 JSP**
+
+```java
+<%@ page import="hello.servlet.domain.member.MemberRepository" %>
+ <%@ page import="hello.servlet.domain.member.Member" %>
+ <%@ page contentType="text/html;charset=UTF-8" language="java" %>
+ <%
+ //    request, response 사용 가능
+    MemberRepository memberRepository = MemberRepository.getInstance();
+    System.out.println("save.jsp");
+    String username = request.getParameter("username");
+    int age = Integer.parseInt(request.getParameter("age"));
+    Member member = new Member(username, age);
+    System.out.println("member = " + member);
+    memberRepository.save(member);
+ %>
+ <html>
+ <head>
+    <meta charset="UTF-8">
+ </head>
+ <body>
+성공
+<ul>
+    <li>id=<%=member.getId()%></li>
+    <li>username=<%=member.getUsername()%></li>
+    <li>age=<%=member.getAge()%></li>
+ </ul>
+ <a href="/index.html">[메인](https://github.com/index.html)</a>
+ </body>
+ </html>
+```
+
+> JSP는 자바 코드 그대로 사용 가능
+
+<br>
+
+**회원 목록 JSP**
+
+```java
+<html>
+<body>
+<!--StartFragment--><%@ page import="java.util.List" %>
+ <%@ page import="hello.servlet.domain.member.MemberRepository" %>
+ <%@ page import="hello.servlet.domain.member.Member" %>
+ <%@ page contentType="text/html;charset=UTF-8" language="java" %>
+ <%
+    MemberRepository memberRepository = MemberRepository.getInstance();
+    List<Member> members = memberRepository.findAll();
+ %>
+ <html>
+ <head>
+    
+    <title>Title</title>
+ </head>
+ <body>
+ <a href="/index.html">메인</a>
+ 
+id | username | age
+-- | -- | --
+" + member.getId() + " | " + member.getUsername() + " | " + member.getAge() + "
+
+
+ </body>
+ </html><!--EndFragment-->
+</body>
+</html>
+<%@ page import="java.util.List" %>
+ <%@ page import="hello.servlet.domain.member.MemberRepository" %>
+ <%@ page import="hello.servlet.domain.member.Member" %>
+ <%@ page contentType="text/html;charset=UTF-8" language="java" %>
+ <%
+    MemberRepository memberRepository = MemberRepository.getInstance();
+    List<Member> members = memberRepository.findAll();
+ %>
+ <html>
+ <head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+ </head>
+ <body>
+ <a href="/index.html">[메인](https://github.com/index.html)</a>
+ <table>
+    <thead>
+    <th>id</th>
+    <th>username</th>
+    <th>age</th>
+    </thead>
+    <tbody>
+ <%
+ %>
+    for (Member member : members) {
+        out.write("    <tr>");
+        out.write("        <td>" + member.getId() + "</td>");
+        out.write("        <td>" + member.getUsername() + "</td>");
+        out.write("        <td>" + member.getAge() + "</td>");
+        out.write("    </tr>");
+    }
+    </tbody>
+ </table>
+ </body>
+ </html>
+```
+
+> 회원 리포지토리 먼저 조회 후, 결과 List 사용하여 <tr><td> 태그를 반복 출력
+
+<br>
+
+**서블릿과 JSP의 한계**
+
+- 서블릿 : 뷰(View)화면을 위한 HTML을 만드는 작업이 자바 코드에 섞여 지저분하고 복잡함
+- JSP : 뷰를 생성하는 HTML 작업을 깔끔하게 가져가고, 중간중간 동적으로 변경이 필요한 부분에만 자
+바 코드를 적용. 그런데 이렇게 해도 해결되지 않는 몇가지 고민이 남는다.
+
+_코드를 잘 보면, JAVA 코드, 데이터를 조회하는 리포지토리 등등 다양한 코드가 모두 JSP에 노출되어 있다. 
+JSP가 너무 많은 역할을 한다._
+
+**MVC 패턴 등장**
+비즈니스 로직은 서블릿 처럼 다른곳에서 처리하고, 
+JSP는 목적에 맞게 HTML로 화면(View)을 그리는 일에 집중하도록 하자. 
+과거 개발자들도 모두 비슷한 고민이 있었고, 그래서 MVC 패턴이 등장했다. 우리도 직접 MVC 패턴을 적용해
+서 프로젝트를 리팩터링 해보자
+
+
 
