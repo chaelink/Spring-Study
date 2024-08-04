@@ -1,0 +1,503 @@
+# 섹션 6. 스프링 MVC - 기본 기능 (2)
+
+## 5. HTTP 요청 - 기본, 헤더 조회
+애노테이션 기반의 스프링 컨트롤러는 다양한 파라미터를 지원한다.
+
+**RequestHeaderController**
+```java
+@Slf4j
+@RestController
+public class RequestHeaderController {
+
+    @RequestMapping("/headers")
+    public String headers(HttpServletRequest request,
+                          HttpServletResponse response,
+                          HttpMethod httpMethod,
+                          Locale locale,
+                          @RequestHeader MultiValueMap<String, String> headerMap,
+                          @RequestHeader("host") String host,
+                          @CookieValue(value = "myCookie", required = false) String cookie) {
+        
+        log.info("request={}", request);
+        log.info("response={}", response);
+        log.info("httpMethod={}", httpMethod);
+        log.info("locale={}", locale);
+        log.info("headerMap={}", headerMap);
+        log.info("header host={}", host);
+        log.info("cookie={}", cookie);
+
+        return "ok";
+    }
+}
+```
+
+- HttpServletRequest
+- HttpServletResponse
+- HttpMethod : HTTP 메서드 조회
+- Locale : Locale 정보 조회
+- @RequestHeader MultiValueMap<String, String> headerMap
+    - 모든 HTTP 헤더를 MultiValueMap 형식으로 조회 
+- @RequestHeader("host") String host
+    - 특정 HTTP 헤더 조회
+    - 속성 
+        - 필수 값 여부 : required
+        - 기본 값 속성 : defaultValue
+
+- @CookieValue(value = "myCookie", required = false) String cookie
+    - 특정 쿠키 조회
+    - 속성
+        - 필수 값 여부 : required
+        - 기본 값 : defaultValue  
+
+**`MultiValueMap`**
+
+- Map 과 유사한데, 하나의 키에 여러 값을 받을 수 있다.
+- HTTP header, HTTP 쿼리 파라미터와 같이 하나의 키에 여러 값을 받을 때 사용
+
+```java
+MultiValueMap<String, String> map = new LinkedMultiValueMap();
+map.add("keyA", "value1");
+map.add("keyA", "value2");
+
+//[value1,value2]
+List<String> values = map.get("keyA");
+```
+<br>
+
+**`@Slf4j`**
+아래의 코드를 자동으로 생성해서 로그를 선언해준다. 개발자는 편리하게 `log` 사용 가능
+```java
+private static final org.slf4j.Logger log = 
+org.slf4j.LoggerFactory.getLogger(RequestHeaderController.class);
+```
+
+>`@Controller` 의 사용 가능한 파라미터 목록, 응답 값 목록에 대한 공식 메뉴얼
+
+>  https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/arguments.html
+
+> https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/return-types.html
+
+
+## 6. HTTP 요청 파라미터 - 쿼리 파라미터, HTML Form
+
+**HTTP 요청 데이터 조회 - 개요**
+서블릿에서 학습했던 HTTP 요청 데이터를 조회하는 방법을 스프링으로 바꿔보기
+
+HTTP 요청 데이터를 통해 클라이언트에서 서버로 데이터 전달하는 방법
+
+1. GET - 쿼리 파라미터
+    -  /url**?username=hello&age=20**
+    - 메시지 바디 없이, URL의 쿼리 파라미터에 데이터를 포함해서 전달
+    - 예) 검색, 필터, 페이징등에서 많이 사용하는 방식
+
+2. POST - HTML Form
+    -  content-type: application/x-www-form-urlencoded
+    - 메시지 바디에 쿼리 파리미터 형식으로 전달 username=hello&age=20
+    - 예) 회원 가입, 상품 주문, HTML Form 사용
+
+3, HTTP message body 에 데이터를 직접 담아서 요청
+
+    -  HTTP API에서 주로 사용, JSON, XML, TEXT
+    - 데이터 형식은 주로 JSON 사용
+    - POST, PUT, PATCH
+
+<br>
+
+**요청 파라미터 - 쿼리 파라미터, HTML Form**
+`HttpServletRequest`의  `request.getParameter()`를 사용하면 다음 두가지 요청 파라미터를 조회할 수 있다.
+
+**1. GET , 쿼리 파라미터 전송**
+`http://localhost:8080/request-param?username=hello&age=20`
+
+**2. POST , HTML Form 전송**
+```java
+POST /request-param ...
+content-type: application/x-www-form-urlencoded
+
+username=hello&age=20
+```
+
+두가지 방식의 형식이 같으므로 구분없이 조회할 수 있다. 이것을 간단히 **요청 파라미터 조회**라고 한다.
+
+<br>
+
+**RequestParamController ( 스프링으로 요청 파라미터 조회하기)**
+```java
+
+@Slf4j
+@Controller
+public class RequestParamController {
+    
+    @RequestMapping("/request-param-v1")
+    public void requestParamV1(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        
+        String username = request.getParameter("username");
+        int age = Integer.parseInt(request.getParameter("age"));
+        log.info("username : {} age : {}", username, age);
+        
+        response.getWriter().write("ok");
+    }
+}
+```
+**request.getParameter()**
+ HttpServletRequest가 제공하는 방식으로 요청 파라미터를 조회
+
+<br>
+
+**테스트 용 Post Form 페이지 생성**
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<form action="/request-param-v1" method="post">
+    username: <input type="text" name="username" />
+    age: <input type="text" name="age" />
+    <button type="submit">전송</button>
+</form>
+</body>
+</html>
+```
+
+> 참고! JAR을 사용하면 webapp 경로를 사용할 수 없다. 정적 리소스도 클래스 경로에 포함해야 함
+
+
+## 7. HTTP 요청 파라미터 - @RequestParam
+
+**requestParamV2**
+```java
+    @ResponseBody //뷰 조회를 무시하고 HTTP message body에 해당 내용 직접 입력
+    @RequestMapping("/request-param-v2")
+    public String requestParamV2(@RequestParam("username") String memberName,
+                                 @RequestParam("age") int memberAge) {
+        log.info("username : {} age : {}", memberName, memberAge);
+        return "ok";
+
+    }
+```
+`RequestParam`
+-  파라미터 이름으로 바인딩
+- `name(value)` 속성이 파라미터 이름으로 사용
+    - @RequestParam("username") String memberName 
+    - request.getParameter("username")
+
+<br>
+
+**requestParamV3**
+```java
+@ResponseBody
+    @RequestMapping("/request-param-v3")
+    public String requestParamV3(@RequestParam String username,
+                                 @RequestParam int age) {
+        log.info("username : {} age : {}", username, age);
+        return "ok";
+
+    }
+```
+HTTP 파라미터 이름이 변수 이름과 같으면 `@RequestParam(name="xx")` 생략 가능
+
+<br>
+
+**requestParamV4**
+```java
+@ResponseBody
+    @RequestMapping("/request-param-v4")
+    public String requestParamV4( String username, int age) {
+        log.info("username : {} age : {}", username, age);
+        return "ok";
+
+    }
+```
+`String`, `int`, `Integer` 등의 단순 타입이면 `@RequestParam ` 생략 가능
+
+> 주의 !  `@RequestParam ` 을 생략하면 스프링 내부에서  `required=false`를 적용한다.
+
+> 참고! 너무 생략하는 것도 과하다는 강사님의 생각 -> 나도 동의한다.  `@RequestParam ` 정도는 있어야 나중에 코드를 읽을 때 편할 것 같다
+
+<br>
+
+**파라미터 필수 여부 - requestParamRequired**
+```java
+@ResponseBody
+    @RequestMapping("/request-param-required")
+    public String requestParamRequired(@RequestParam(required = true) String username,
+                                       @RequestParam(required = false) int age) {
+        log.info("username : {} age : {}", username, age);
+        return "ok";
+
+    }
+```
+
+- `@RequestParam.required`
+    -  파라미터 필수 여부, 기본 값이 true
+
+<br>
+
+**기본 값 적용 - requestParamDefault**
+```java
+@ResponseBody
+    @RequestMapping("/request-param-default")
+    public String requestParamDefault(@RequestParam(required = true, defaultValue = "guest") String username,
+                                       @RequestParam(required = false, defaultValue = "-1") int age) {
+        log.info("username : {} age : {}", username, age);
+        return "ok";
+
+    }
+```
+
+- 파라미터에 값이 없는 경우 `defaultValue`를 사용하여 기본 값 적용 가능, 이미 기본 값이 있기에 `required`는 의미 없다
+- 빈 문자의 경우에도 설정한 기본 값이 적용 됨
+    -  /request-param-default?username=
+
+<br>
+
+**파라미터를 Map으로 조회하기 - requestParamMap**
+```java
+@ResponseBody
+    @RequestMapping("/request-param-map")
+    public String requestParamMap(@RequestParam Map<String, Object> paramMap) {
+        log.info("username : {} age : {}", paramMap.get("username"), paramMap.get("age"));
+        return "ok";
+
+    }
+```
+파라미터를 Map, MultiValueMap으로 조회할 수 있다.
+- `@RequestParam Map`
+    -  `Map(key=value)`
+- `@RequestParam MultiValueMap`
+    -  `MultiValueMap(key=[value1, value2, ...])   ex) (key=userIds, value=[id1, id2])`
+
+
+## 8. HTTP 요청 파라미터 - @ModelAttribute
+요청 파라미터를 받아서 필요한 객체를 만들고 그 객체에 값을 넣어주어야 한다.
+
+**HelloData**
+요청 파라미터를 바인딩 받을 객체
+```java
+@Data
+public class HelloData {
+    private String username;
+    private int age;
+}
+```
+
+- `@Data` 롬복 : `@Getter`, `@Setter`,  `@ToString`,  `@EqualsAndHashCode`, `@RequiredArgsConstructor` 를 자동으로 적용해준다.
+
+<br>
+
+**@ModelAttribute 적용 v1**
+```java
+@ResponseBody
+    @RequestMapping("/model-attribute-v1")
+    public String modelAttributeV1(@ModelAttribute HelloData helloData) {
+        log.info("username : {} age : {}", helloData.getUsername(), helloData.getAge());
+        return "ok";
+
+    }
+```
+마법처럼 HelloData 객체가 생성되고, 요청 파라미터의 값이 모두 들어가 있다.
+@ModelAttribute가 있으면 스프링이 실행하는 내용
+- HelloData 객체 생성
+- 요청 파라미터 이름으로 HelloData 객체의 프로퍼티를 찾아 setter 실행(파라미터 값 바인딩)
+
+> **프로퍼티**
+    객체에 `getUsername()`, `setUsername()` 메서드가 있으면, 이 객체는 username 이라는 프로퍼티를 가지고 있다
+
+> **바인딩 오류**
+    숫자가 들어가야 하는 곳에 문자를 넣으면  `BindException` 발생. 이런 바인딩 오류는 검증 부분에서 다룬다
+
+<br>
+
+**@ModelAttribute 생략 - modelAttributeV2**
+```java
+@ResponseBody
+    @RequestMapping("/model-attribute-v2")
+    public String modelAttributeV2( HelloData helloData) {
+        log.info("username : {} age : {}", helloData.getUsername(), helloData.getAge());
+        return "ok";
+
+    }
+```
+`@ModelAttribute` 를 생략할 수 있다. 그런데 `@RequestParam`도 생략할 수 있으니 혼란이 발생할 수 있다.
+
+스프링의 규칙
+
+- `String`, `int`, `Integer` 등의 단순 타입 : `@RequestParam ` 
+- 나머지 : `@ModelAttribute` 
+
+
+
+## 9. HTTP 요청 파라미터 - 단순 텍스트
+
+**HTTP message body에 데이터를 직접 담아서 요청**
+
+- HTTP API에서 주로 사용, JSON, XML, TEXT
+- 데이터 형식은 주로 JSON 사용
+- POST, PUT, PATCH
+- HTTP 메시지 바디를 통해 데이터가 직접 넘어오는 경우는`@RequestParam` , `@ModelAttribute` 를 사용할 수 없다
+
+<br>
+
+**RequestBodyStringController**
+```java
+@Slf4j
+@Controller
+public class RequestBodyStringController {
+    
+    @PostMapping("/request-body-string-v1")
+    public void requestBodyString(HttpServletRequest request, HttpServletResponse response)throws IOException {
+        ServletInputStream inputStream = request.getInputStream();
+        String messageBody = StreamUtils.copyToString(inputStream, StandardCharsets.UTF_8);
+        log.info("messageBody={}",messageBody);
+        
+        response.getWriter().write("ok");
+    }
+}
+```
+
+- 가장 단순한 방법, InputStream을 사용해서 HTTP 메시지 바디의 데이터를 직접 읽을 수 있다
+
+<br>
+
+**Input, Output 스트림, Reader - requestBodyStringV2**
+```java
+@PostMapping("/request-body-string-v2")
+    public void requestBodyStringV2(InputStream inputStream, Writer responseWriter)throws IOException {
+        
+        String messageBody = StreamUtils.copyToString(inputStream, StandardCharsets.UTF_8);
+        log.info("messageBody={}",messageBody);
+
+        responseWriter.write("ok");
+    }
+```
+**스프링 MVC가 지원하는 파라미터**
+- InputStream(Reader): HTTP 요청 메시지 바디의 내용을 직접 조회
+- OutputStream(Writer): HTTP 응답 메시지의 바디에 직접 결과 출력
+
+<br>
+
+**HttpEntity - requestBodyStringV3**
+```java
+@PostMapping("/request-body-string-v3")
+    public HttpEntity<String> requestBodyStringV3(HttpEntity<String> httpEntity ) {
+
+        String messageBody = httpEntity.getBody();
+        log.info("messageBody={}",messageBody);
+
+        return new HttpEntity<>("ok");
+    }
+```
+**HttpEntity** HTTP header, body 정보를 편리하게 조회
+
+- 메시지 바디 정보를 직접 조회
+- 요청 파라미터를 조회하는 기능과 관계 없음 `@RequestParam` X, `@ModelAttribute` X
+- 응답에도 사용 가능
+    - 메시지 바디 정보 직접 반환
+    - 헤더 정보 포함 가능
+    - view 조회X
+
+`HttpEntity` 를 상속받은 다음 객체들도 같은 기능을 제공
+
+- RequestEntity : HttpMethod, url 정보가 추가, 요청에서 사용
+- ResponseEntity : HTTP 상태 코드 설정 가능, 응답에서 사용
+    - `return new ResponseEntity<String>("Hello World", responseHeaders, HttpStatus.CREATED) `
+
+<br>
+
+**@RequestBody - requestBodyStringV4**
+```java
+@ResponseBody
+    @PostMapping("/request-body-string-v4")
+    public String requestBodyStringV4(@RequestBody String messageBody ) {
+        log.info("messageBody={}",messageBody);
+        return "ok";
+        
+    }
+```
+**@RequestBody**
+HTTP 메시지 바디 정보를 편리하게 조회 가능
+*헤더 정보가 필요하면 `HttpEntity` 또는 `@RequestHeader` 사용
+*요청 파라미터를 조회하는 기능과 관계 없음 `@RequestParam` X, `@ModelAttribute` X
+
+<br>
+
+**요청 파라미터 vs HTTP 메시지 바디**
+- 요청 파라미터를 조회하는 기능: `@RequestParam` , `@ModelAttribute`
+- HTTP 메시지 바디를 직접 조회하는 기능: `@RequestBody`
+
+**@ResponseBody**
+`@ResponseBody`를 사용하면 응답 결과를 HTTP 메시지 바디에 담아서 전달 가능, view는 사용하지 않음
+
+
+
+## 10. HTTP 요청 파라미터 - JSON
+
+**RequestBodyJsonController**
+```java
+@Slf4j
+@Controller
+public class RequestBodyJsonController {
+
+    private ObjectMapper objectMapper = new ObjectMapper();
+
+    @PostMapping("/request-body-json-v1")
+    public void requestBodyJsonV1(HttpServletRequest request, 
+                                  HttpServletResponse response) throws IOException {
+        ServletInputStream inputStream = request.getInputStream();
+        String messageBody = StreamUtils.copyToString(inputStream, StandardCharsets.UTF_8);
+        
+        log.info("messageBody: {}", messageBody);
+        HelloData data = objectMapper.readValue(messageBody, HelloData.class);
+        log.info("username: {}, age={}", data.getUsername(), data.getAge());
+        
+        response.getWriter().write("ok");
+    }
+}
+```
+
+- HttpServletRequest를 사용해서 직접 HTTP 메시지 바디에서 데이터를 읽어와서, 문자로 변환한다.
+- 문자로 된 JSON 데이터를 Jackson 라이브러리인 `objectMapper` 를 사용해서 자바 객체로 변환한다.
+
+<br>
+
+**requestBodyJsonV2 - @RequestBody 문자 변환**
+```java
+@PostMapping("/request-body-json-v2")
+    public String requestBodyJsonV2(@RequestBody String messageBody) throws IOException {
+        HelloData data = objectMapper.readValue(messageBody, HelloData.class);
+        log.info("username: {}, age={}", data.getUsername(), data.getAge());
+
+        return "ok";
+    }
+```
+
+- 이전에 학습했던 `@RequestBody`를 사용해서 HTTP 메시지에서 데이터를 꺼내고 messageBody에 저장
+- 문자로 된 JSON 데이터인 `messageBody` 를 `objectMapper` 를 통해서 자바 객체로 변환
+
+`문자로 변환하고 다시 json으로 변환하는 과정이 불편하다. @ModelAttribute처럼 한번에 객체로 변환할 수는 없을까?`
+
+<br>
+
+**requestBodyJsonV3 - @RequestBody 객체 변환**
+```java
+    @PostMapping("/request-body-json-v3")
+    public String requestBodyJsonV3(@RequestBody HelloData data) {
+        log.info("username: {}, age={}", data.getUsername(), data.getAge());
+        return "ok";
+    }
+```
+**@RequestBody 객체 파라미터**
+- 직접 만든 객체를 지정
+- 생략 불가능(생략하면 @ModelAttribute가 적용되어버림)
+
+`HttpEntity` , `@RequestBody` 를 사용하면 HTTP 메시지 컨버터가 HTTP 메시지 바디의 내용을 우리가 원하는 문
+자나 객체 등으로 변환해준다.
+HTTP 메시지 컨버터는 문자 뿐만 아니라 JSON도 객체로 변환해주는데, 우리가 방금 V2에서 했던 작업을 대신 처리해준다.
+자세한 내용은 뒤에 HTTP 메시지 컨버터에서 다룬다
+
+
+> 주의 ! HTTP 요청시에 content-type이 application/json인지 꼭! 확인하기
+
